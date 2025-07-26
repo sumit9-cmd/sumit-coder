@@ -1,0 +1,140 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <thread>
+#include <mutex>
+
+using namespace std;
+
+// Function to compress a portion of data using Run-Length Encoding (RLE)
+string compress(const string& data) {
+    string compressed;
+    int count = 1;
+    
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (data[i] == data[i - 1]) {
+            count++;
+        } else {
+            compressed += to_string(count) + data[i - 1];
+            count = 1;
+        }
+    }
+    compressed += to_string(count) + data[data.size() - 1]; // Append last group
+    return compressed;
+}
+
+// Function to decompress the compressed data
+string decompress(const string& data) {
+    string decompressed;
+    string countStr;
+    
+    for (char c : data) {
+        if (isdigit(c)) {
+            countStr += c; // Build the count string
+        } else {
+            int count = stoi(countStr);  // Convert count to integer
+            decompressed.append(count, c);  // Append 'count' copies of the character
+            countStr.clear();  // Clear the count string
+        }
+    }
+    
+    return decompressed;
+}
+
+// Function to compress file in chunks using multiple threads
+void compressFileChunk(const string& chunk, string& result, mutex& mtx) {
+    string compressed = compress(chunk);
+    lock_guard<mutex> lock(mtx);
+    result += compressed;
+}
+
+// Function to decompress file in chunks using multiple threads
+void decompressFileChunk(const string& chunk, string& result, mutex& mtx) {
+    string decompressed = decompress(chunk);
+    lock_guard<mutex> lock(mtx);
+    result += decompressed;
+}
+
+// Function to read a file into a string
+string readFile(const string& filename) {
+    ifstream inFile(filename, ios::binary);
+    string content((istreambuf_iterator<char>(inFile)), istreambuf_iterator<char>());
+    return content;
+}
+
+// Function to write a string to a file
+void writeFile(const string& filename, const string& data) {
+    ofstream outFile(filename, ios::binary);
+    outFile << data;
+}
+
+// Function to perform file compression with multithreading
+void compressFile(const string& inputFile, const string& outputFile, size_t chunkSize) {
+    string data = readFile(inputFile);  // Read the input file
+    string compressedData;
+    vector<thread> threads;
+    mutex mtx;
+    
+    // Divide the data into chunks and process each chunk in a separate thread
+    for (size_t i = 0; i < data.size(); i += chunkSize) {
+        string chunk = data.substr(i, chunkSize);
+        threads.push_back(thread(compressFileChunk, chunk, ref(compressedData), ref(mtx)));
+    }
+    
+    for (auto& t : threads) {
+        t.join();  // Wait for all threads to finish
+    }
+    
+    writeFile(outputFile, compressedData);  // Write compressed data to file
+    cout << "File compressed successfully!" << endl;
+}
+
+// Function to perform file decompression with multithreading
+void decompressFile(const string& inputFile, const string& outputFile, size_t chunkSize) {
+    string data = readFile(inputFile);  // Read the input file
+    string decompressedData;
+    vector<thread> threads;
+    mutex mtx;
+    
+    // Divide the data into chunks and process each chunk in a separate thread
+    for (size_t i = 0; i < data.size(); i += chunkSize) {
+        string chunk = data.substr(i, chunkSize);
+        threads.push_back(thread(decompressFileChunk, chunk, ref(decompressedData), ref(mtx)));
+    }
+    
+    for (auto& t : threads) {
+        t.join();  // Wait for all threads to finish
+    }
+    
+    writeFile(outputFile, decompressedData);  // Write decompressed data to file
+    cout << "File decompressed successfully!" << endl;
+}
+
+int main() {
+    string inputFile, outputFile;
+    size_t chunkSize = 1024 * 1024;  // Process file in 1MB chunks
+    
+    cout << "Enter the name of the input file: ";
+    cin >> inputFile;
+    
+    cout << "Enter the name of the output file: ";
+    cin >> outputFile;
+    
+    int choice;
+    cout << "Choose an option:\n";
+    cout << "1. Compress File\n";
+    cout << "2. Decompress File\n";
+    cout << "Enter your choice (1 or 2): ";
+    cin >> choice;
+    
+    if (choice == 1) {
+        compressFile(inputFile, outputFile, chunkSize);  // Compress the file
+    } else if (choice == 2) {
+        decompressFile(inputFile, outputFile, chunkSize);  // Decompress the file
+    } else {
+        cout << "Invalid option!" << endl;
+    }
+    
+    return 0;
+}
