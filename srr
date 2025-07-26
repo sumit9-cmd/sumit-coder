@@ -1,0 +1,152 @@
+#include <iostream>
+#include <string>
+#include <cctype>
+#include <stdexcept>
+
+using namespace std;
+
+// Enum for different token types
+enum class Token {
+    Number, Plus, Minus, Mul, Div, LParen, RParen, End, Invalid
+};
+
+// Tokenizer class to generate tokens
+class Tokenizer {
+private:
+    string expression;
+    size_t index;
+    char current_char;
+
+public:
+    Tokenizer(const string& expr) : expression(expr), index(0), current_char(expression[0]) {}
+
+    void advance() {
+        index++;
+        if (index < expression.size()) {
+            current_char = expression[index];
+        } else {
+            current_char = '\0'; // End of input
+        }
+    }
+
+    Token getNextToken() {
+        while (isspace(current_char)) {
+            advance(); // Skip whitespace
+        }
+
+        if (isdigit(current_char)) {
+            return Token::Number;
+        }
+
+        switch (current_char) {
+            case '+': advance(); return Token::Plus;
+            case '-': advance(); return Token::Minus;
+            case '*': advance(); return Token::Mul;
+            case '/': advance(); return Token::Div;
+            case '(': advance(); return Token::LParen;
+            case ')': advance(); return Token::RParen;
+            case '\0': return Token::End;
+            default: return Token::Invalid;
+        }
+    }
+
+    string getNumber() {
+        string number = "";
+        while (isdigit(current_char)) {
+            number += current_char;
+            advance();
+        }
+        return number;
+    }
+};
+
+// Parser class to evaluate the arithmetic expression
+class Parser {
+private:
+    Tokenizer tokenizer;
+    Token current_token;
+
+public:
+    Parser(const string& expr) : tokenizer(expr) {
+        current_token = tokenizer.getNextToken();
+    }
+
+    // Factor: A number or an expression in parentheses
+    int factor() {
+        if (current_token == Token::Number) {
+            string num_str = tokenizer.getNumber();
+            current_token = tokenizer.getNextToken();
+            return stoi(num_str); // Convert string to integer
+        } else if (current_token == Token::LParen) {
+            current_token = tokenizer.getNextToken();
+            int result = expr(); // Recursively parse the expression inside parentheses
+            if (current_token != Token::RParen) {
+                throw runtime_error("Mismatched parentheses");
+            }
+            current_token = tokenizer.getNextToken();
+            return result;
+        } else {
+            throw runtime_error("Invalid factor");
+        }
+    }
+
+    // Term: A factor followed by * or /
+    int term() {
+        int result = factor();
+        while (current_token == Token::Mul || current_token == Token::Div) {
+            Token op = current_token;
+            current_token = tokenizer.getNextToken();
+            int next_factor = factor();
+            if (op == Token::Mul) {
+                result *= next_factor;
+            } else if (op == Token::Div) {
+                if (next_factor == 0) {
+                    throw runtime_error("Division by zero");
+                }
+                result /= next_factor;
+            }
+        }
+        return result;
+    }
+
+    // Expression: A term followed by + or -
+    int expr() {
+        int result = term();
+        while (current_token == Token::Plus || current_token == Token::Minus) {
+            Token op = current_token;
+            current_token = tokenizer.getNextToken();
+            int next_term = term();
+            if (op == Token::Plus) {
+                result += next_term;
+            } else if (op == Token::Minus) {
+                result -= next_term;
+            }
+        }
+        return result;
+    }
+
+    // Method to start parsing the expression
+    int parse() {
+        int result = expr();
+        if (current_token != Token::End) {
+            throw runtime_error("Unexpected token after expression");
+        }
+        return result;
+    }
+};
+
+int main() {
+    string expression;
+    cout << "Enter an arithmetic expression: ";
+    getline(cin, expression);
+    
+    try {
+        Parser parser(expression);
+        int result = parser.parse();
+        cout << "Result: " << result << endl;
+    } catch (const runtime_error& e) {
+        cout << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
